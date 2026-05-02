@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="description" content="メルカリ出品用画像加工ツール - P.I.F. ブランド">
+<title>P.I.F. PHOTO STUDIO</title>
+
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./favicon.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="P.I.F.">
+<meta name="mobile-web-app-capable" content="yes">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root {
+  --bg-0: #0a0a0a;
+  --bg-1: #141414;
+  --bg-2: #1c1c1c;
+  --bg-3: #262626;
+  --line: #2e2e2e;
+  --text-0: #f5f5f5;
+  --text-1: #a8a8a8;
+  --text-2: #6e6e6e;
+  --accent: #d4d4d4;
+  --warn: #c97c4a;
+  --ok: #7a9e6e;
+  --err: #b85450;
+  --mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+  --sans: 'Inter', -apple-system, 'Helvetica Neue', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--bg-0); color: var(--text-0);
+  font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  min-height: 100vh; -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+body { padding-bottom: env(safe-area-inset-bottom); }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, select { font-family: inherit; }
+
+header {
+  background: var(--bg-1); border-bottom: 1px solid var(--line);
+  padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+  position: sticky; top: 0; z-index: 100;
+}
+.brand { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 0.15em; }
+.brand-sub { font-family: var(--mono); font-size: 10px; color: var(--text-2); letter-spacing: 0.1em; }
+.header-btn {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  padding: 8px 12px; border: 1px solid var(--line);
+  background: var(--bg-2); color: var(--text-1); text-transform: uppercase;
+}
+.header-btn:active { background: var(--bg-3); }
+
+main { padding: 16px; max-width: 720px; margin: 0 auto; }
+.section { background: var(--bg-1); border: 1px solid var(--line); margin-bottom: 12px; }
+.section-head {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  color: var(--text-2); padding: 10px 14px; border-bottom: 1px solid var(--line);
+  text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.section-body { padding: 14px; }
+
+.file-drop {
+  border: 1px dashed var(--line); background: var(--bg-2);
+  padding: 28px 16px; text-align: center; display: block; cursor: pointer;
+}
+.file-drop:active { background: var(--bg-3); }
+.file-drop-main { font-family: var(--mono); font-size: 13px; letter-spacing: 0.1em; margin-bottom: 6px; }
+.file-drop-sub { font-size: 11px; color: var(--text-2); }
+
+.thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.thumb {
+  position: relative; aspect-ratio: 1; background: var(--bg-2);
+  border: 1px solid var(--line); overflow: hidden;
+}
+.thumb.selected { border-color: var(--accent); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-status {
+  position: absolute; top: 2px; right: 2px;
+  font-family: var(--mono); font-size: 9px;
+  background: var(--bg-0); color: var(--text-1);
+  padding: 1px 4px; letter-spacing: 0.05em;
+}
+.thumb-status.done { color: var(--ok); }
+.thumb-status.err { color: var(--err); }
+.thumb-del {
+  position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  background: var(--bg-0); color: var(--text-1);
+  font-size: 11px; line-height: 18px; text-align: center;
+  border: 1px solid var(--line);
+}
+
+.preview-wrap {
+  background: #000;
+  display: flex; justify-content: center; align-items: center;
+  aspect-ratio: 1; overflow: hidden; position: relative;
+  touch-action: none;
+  user-select: none; -webkit-user-select: none;
+}
+.preview-wrap canvas { max-width: 100%; max-height: 100%; display: block; }
+.preview-empty { font-family: var(--mono); font-size: 11px; color: var(--text-2); letter-spacing: 0.1em; }
+.preview-toggle {
+  position: absolute; bottom: 8px; right: 8px;
+  display: flex; gap: 4px; z-index: 5;
+}
+.toggle-btn {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  padding: 5px 8px; background: rgba(20,20,20,0.85);
+  color: var(--text-1); border: 1px solid var(--line);
+}
+.toggle-btn.active { color: var(--text-0); border-color: var(--accent); }
+.preview-hint {
+  position: absolute; top: 8px; left: 8px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+  color: var(--text-2); background: rgba(20,20,20,0.85);
+  padding: 4px 6px; border: 1px solid var(--line);
+  pointer-events: none; z-index: 4;
+}
+
+.preset-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.preset-btn {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em;
+  padding: 12px 2px; background: var(--bg-2); color: var(--text-1);
+  border: 1px solid var(--line); text-align: center;
+}
+.preset-btn.active { background: var(--bg-3); color: var(--text-0); border-color: var(--accent); }
+.preset-btn:active { transform: translateY(1px); }
+
+.detail-toggle {
+  width: 100%; text-align: left;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em;
+  color: var(--text-2); padding: 10px 14px; border: none; background: transparent;
+  text-transform: uppercase;
+  display: flex; justify-content: space-between;
+}
+.detail-toggle::after { content: '+'; font-size: 14px; }
+.detail-toggle.open::after { content: '−'; }
+.detail-body { padding: 4px 14px 14px; display: none; }
+.detail-body.open { display: block; }
+
+.subgroup-head {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em;
+  color: var(--text-2); padding: 8px 0 6px;
+  border-top: 1px solid var(--line); margin-top: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.subgroup-head:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+.subgroup-reset {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.05em;
+  color: var(--text-1); padding: 3px 6px;
+  border: 1px solid var(--line); background: var(--bg-2);
+}
+.subgroup-reset:active { background: var(--bg-3); }
+
+.slider-row { display: flex; align-items: center; margin-bottom: 10px; gap: 10px; }
+.slider-row:last-child { margin-bottom: 0; }
+.slider-label { font-family: var(--mono); font-size: 11px; color: var(--text-1); letter-spacing: 0.05em; width: 100px; flex-shrink: 0; }
+.slider-value { font-family: var(--mono); font-size: 11px; color: var(--text-0); width: 46px; text-align: right; flex-shrink: 0; }
+input[type="range"] {
+  flex: 1; -webkit-appearance: none; appearance: none;
+  background: var(--bg-3); height: 2px; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px;
+  background: var(--accent); cursor: pointer; border: 2px solid var(--bg-0);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px; height: 16px;
+  background: var(--accent); cursor: pointer; border: 2px solid var(--bg-0); border-radius: 0;
+}
+
+.action-row { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 14px; }
+.action-btn {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.15em;
+  padding: 16px; background: var(--bg-2); color: var(--text-0);
+  border: 1px solid var(--line); text-transform: uppercase; font-weight: 600;
+}
+.action-btn.primary { background: var(--accent); color: var(--bg-0); border-color: var(--accent); }
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.action-btn:active:not(:disabled) { transform: translateY(1px); }
+
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  z-index: 200; display: none; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-bg.open { display: flex; }
+.modal { background: var(--bg-1); border: 1px solid var(--line); width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
+.modal-head { padding: 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+.modal-title { font-family: var(--mono); font-size: 12px; letter-spacing: 0.15em; text-transform: uppercase; }
+.modal-close { font-family: var(--mono); font-size: 18px; color: var(--text-1); width: 28px; height: 28px; }
+.modal-body { padding: 14px; }
+.modal-foot { padding: 14px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+
+.logo-preview {
+  background: var(--bg-2); border: 1px solid var(--line);
+  height: 120px; display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px;
+  background-image: linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+.logo-preview img { max-width: 80%; max-height: 80%; }
+.logo-preview-empty { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+
+.progress-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 300; display: none; align-items: center; justify-content: center; flex-direction: column; padding: 24px; }
+.progress-overlay.open { display: flex; }
+.progress-text { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; margin-bottom: 16px; color: var(--text-1); }
+.progress-bar { width: 100%; max-width: 320px; height: 2px; background: var(--bg-3); margin-bottom: 8px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s; }
+.progress-count { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--bg-2); color: var(--text-0); border: 1px solid var(--line);
+  padding: 10px 16px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em;
+  z-index: 400; display: none; max-width: 90%;
+}
+.toast.open { display: block; }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand">P.I.F. STUDIO</div>
+    <div class="brand-sub">PHOTO PROCESSING / V2.0</div>
+  </div>
+  <button class="header-btn" id="btn-logo-modal">LOGO</button>
+</header>
+
+<main>
+  <section class="section">
+    <div class="section-head">
+      <span>01 / INPUT</span>
+      <span id="file-count" style="color:var(--text-1);">0 FILES</span>
+    </div>
+    <div class="section-body">
+      <label class="file-drop">
+        <input type="file" id="file-input" accept="image/*" multiple style="display:none;">
+        <div class="file-drop-main">SELECT IMAGES</div>
+        <div class="file-drop-sub">JPEG / PNG / 複数選択可</div>
+      </label>
+      <div class="thumb-grid" id="thumb-grid" style="margin-top:12px; display:none;"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <span>02 / PREVIEW</span>
+      <span id="preview-name" style="color:var(--text-1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;"></span>
+    </div>
+    <div class="preview-wrap" id="preview-wrap">
+      <div class="preview-empty" id="preview-empty">画像を選択してください</div>
+      <canvas id="preview-canvas" style="display:none;"></canvas>
+      <div class="preview-hint" id="preview-hint" style="display:none;">2本指：回転＋ズーム / 1本指：移動</div>
+      <div class="preview-toggle" id="preview-toggle" style="display:none;">
+        <button class="toggle-btn" data-mode="before">BEFORE</button>
+        <button class="toggle-btn active" data-mode="after">AFTER</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span>03 / PRESET</span></div>
+    <div class="section-body">
+      <div class="preset-row">
+        <button class="preset-btn active" data-preset="standard">標準</button>
+        <button class="preset-btn" data-preset="strong">強め</button>
+        <button class="preset-btn" data-preset="max">最強</button>
+        <button class="preset-btn" data-preset="weak">弱め</button>
+      </div>
+    </div>
+    <button class="detail-toggle" id="detail-toggle">DETAIL ADJUSTMENT</button>
+    <div class="detail-body" id="detail-body">
+
+      <div class="subgroup-head"><span>COLOR / TONE</span></div>
+      <div class="slider-row">
+        <span class="slider-label">BLACK INTENSITY</span>
+        <input type="range" id="s-bint" min="0" max="100" value="25">
+        <span class="slider-value" id="v-bint">25</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">BLACK RANGE</span>
+        <input type="range" id="s-brng" min="64" max="220" value="128">
+        <span class="slider-value" id="v-brng">128</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">SHARPEN</span>
+        <input type="range" id="s-sharp" min="0" max="100" value="30">
+        <span class="slider-value" id="v-sharp">30</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">VIGNETTE</span>
+        <input type="range" id="s-vig" min="0" max="60" value="15">
+        <span class="slider-value" id="v-vig">15</span>
+      </div>
+
+      <div class="subgroup-head">
+        <span>TRANSFORM</span>
+        <button class="subgroup-reset" id="btn-reset-transform">RESET</button>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">ROTATION</span>
+        <input type="range" id="s-rot" min="-450" max="450" value="0">
+        <span class="slider-value" id="v-rot">0.0°</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">ZOOM</span>
+        <input type="range" id="s-zoom" min="100" max="200" value="100">
+        <span class="slider-value" id="v-zoom">100%</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">CROP X</span>
+        <input type="range" id="s-cx" min="-50" max="50" value="0">
+        <span class="slider-value" id="v-cx">0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">CROP Y</span>
+        <input type="range" id="s-cy" min="-50" max="50" value="0">
+        <span class="slider-value" id="v-cy">0</span>
+      </div>
+
+      <div class="subgroup-head"><span>LOGO</span></div>
+      <div class="slider-row">
+        <span class="slider-label">LOGO SIZE</span>
+        <input type="range" id="s-lsize" min="10" max="30" value="20">
+        <span class="slider-value" id="v-lsize">20%</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">LOGO MARGIN</span>
+        <input type="range" id="s-lmargin" min="2" max="10" value="5">
+        <span class="slider-value" id="v-lmargin">5%</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">LOGO ALPHA</span>
+        <input type="range" id="s-lopacity" min="50" max="100" value="100">
+        <span class="slider-value" id="v-lopacity">100%</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span>04 / EXPORT</span></div>
+    <div class="action-row">
+      <button class="action-btn primary" id="btn-process">PROCESS ALL</button>
+      <button class="action-btn" id="btn-zip" disabled>DOWNLOAD ZIP</button>
+    </div>
+  </section>
+
+  <p style="font-family:var(--mono); font-size:10px; color:var(--text-2); text-align:center; padding:8px 0 24px; letter-spacing:0.05em;">
+    画像は完全ローカル処理。外部送信なし。
+  </p>
+</main>
+
+<div class="modal-bg" id="logo-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">LOGO SETTING</span>
+      <button class="modal-close" data-close>×</button>
+    </div>
+    <div class="modal-body">
+      <div class="logo-preview" id="logo-preview">
+        <span class="logo-preview-empty">透過PNG未設定</span>
+      </div>
+      <label class="file-drop">
+        <input type="file" id="logo-input" accept="image/png,image/jpeg" style="display:none;">
+        <div class="file-drop-main">SELECT LOGO</div>
+        <div class="file-drop-sub">透過PNG推奨</div>
+      </label>
+      <p style="font-size:11px; color:var(--text-2); margin-top:12px; line-height:1.6;">
+        ロゴはブラウザに保存され、次回も使用できます。位置：右下固定。
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="action-btn" id="btn-logo-clear" style="flex:1;">CLEAR</button>
+      <button class="action-btn primary" data-close style="flex:1;">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<div class="progress-overlay" id="progress-overlay">
+  <div class="progress-text" id="progress-text">PROCESSING...</div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="progress-count" id="progress-count">0 / 0</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+const State = {
+  files: [],
+  selectedId: null,
+  logoBlob: null,
+  logoImg: null,
+  previewMode: 'after',
+  settings: {
+    blackIntensity: 25,
+    blackRange: 128,
+    sharpen: 30,
+    vignette: 15,
+    rotation: 0,
+    zoom: 100,
+    cropX: 0,
+    cropY: 0,
+    logoSize: 20,
+    logoMargin: 5,
+    logoOpacity: 100,
+  },
+  currentPreset: 'standard',
+};
+
+const PRESETS = {
+  standard: { blackIntensity: 25, blackRange: 128, sharpen: 30, vignette: 15 },
+  strong:   { blackIntensity: 50, blackRange: 160, sharpen: 45, vignette: 25 },
+  max:      { blackIntensity: 80, blackRange: 200, sharpen: 60, vignette: 40 },
+  weak:     { blackIntensity: 10, blackRange: 100, sharpen: 15, vignette: 8  },
+};
+
+const TRANSFORM_DEFAULTS = { rotation: 0, zoom: 100, cropX: 0, cropY: 0 };
+
+const DB = {
+  _db: null,
+  async open() {
+    if (this._db) return this._db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('pif-studio', 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('logo')) db.createObjectStore('logo');
+      };
+      req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+      req.onerror = () => reject(new Error('IndexedDB open failed'));
+    });
+  },
+  async saveLogo(blob) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('logo', 'readwrite');
+      tx.objectStore('logo').put(blob, 'main');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(new Error('Logo save failed'));
+    });
+  },
+  async loadLogo() {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('logo', 'readonly');
+        const req = tx.objectStore('logo').get('main');
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(new Error('Logo load failed'));
+      });
+    } catch (e) { console.warn(e); return null; }
+  },
+  async clearLogo() {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('logo', 'readwrite');
+      tx.objectStore('logo').delete('main');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(new Error('Logo clear failed'));
+    });
+  }
+};
+
+const ImageProcessor = {
+
+  async loadImage(file) {
+    try {
+      if (typeof createImageBitmap === 'function') {
+        try {
+          return await createImageBitmap(file, { imageOrientation: 'from-image' });
+        } catch (e) {
+          return await createImageBitmap(file);
+        }
+      }
+      return await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Image load failed'));
+        img.src = URL.createObjectURL(file);
+      });
+    } catch (e) {
+      throw new Error('画像読込失敗: ' + (e.message || ''));
+    }
+  },
+
+  // 変形（ズーム・回転・クロップ位置）して正方形描画
+  // 「黒い余白なし」保証：回転に応じて自動拡大
+  drawTransformed(ctx, srcImg, srcW, srcH, outSize, settings) {
+    const rotRad = (settings.rotation) * Math.PI / 180;
+    // 正方形を回転後に覆うのに必要な拡大率
+    const autoZoom = Math.abs(Math.cos(rotRad)) + Math.abs(Math.sin(rotRad));
+    const userZoom = settings.zoom / 100;
+    const totalZoom = autoZoom * userZoom;
+
+    // ソース画像の中心位置（CROPで微調整）
+    const baseSize = Math.min(srcW, srcH);
+    // 表示される（クロップされない）ソース領域のサイズ
+    const visibleSrcSize = baseSize / totalZoom;
+    const maxOffsetX = Math.max(0, (srcW - visibleSrcSize) / 2);
+    const maxOffsetY = Math.max(0, (srcH - visibleSrcSize) / 2);
+    const sourceCx = srcW / 2 + maxOffsetX * (settings.cropX / 50);
+    const sourceCy = srcH / 2 + maxOffsetY * (settings.cropY / 50);
+
+    ctx.save();
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, outSize, outSize);
+    ctx.translate(outSize / 2, outSize / 2);
+    ctx.rotate(rotRad);
+    ctx.scale(totalZoom, totalZoom);
+    // ソース画像のbaseSize範囲をoutSize/totalZoom分の領域に描画
+    const srcDrawSize = baseSize;
+    const dstDrawSize = outSize / totalZoom;
+    ctx.drawImage(
+      srcImg,
+      sourceCx - srcDrawSize / 2, sourceCy - srcDrawSize / 2,
+      srcDrawSize, srcDrawSize,
+      -dstDrawSize / 2, -dstDrawSize / 2,
+      dstDrawSize, dstDrawSize
+    );
+    ctx.restore();
+  },
+
+  async process(image, settings, logoImg) {
+    const w = image.width;
+    const h = image.height;
+    const outSize = Math.min(w, h);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outSize;
+    canvas.height = outSize;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    this.drawTransformed(ctx, image, w, h, outSize, settings);
+
+    let imageData = ctx.getImageData(0, 0, outSize, outSize);
+
+    if (settings.blackIntensity > 0) {
+      this.applyBlackPoint(imageData, settings.blackIntensity, settings.blackRange);
+    }
+    if (settings.vignette > 0) {
+      this.applyVignette(imageData, settings.vignette);
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    if (settings.sharpen > 0) {
+      const data2 = ctx.getImageData(0, 0, outSize, outSize);
+      const sharpened = this.applySharpen(data2, settings.sharpen);
+      ctx.putImageData(sharpened, 0, 0);
+    }
+
+    if (logoImg) {
+      this.applyLogo(ctx, logoImg, outSize, settings);
+    }
+
+    return canvas;
+  },
+
+  applyBlackPoint(imageData, intensity, range) {
+    const d = imageData.data;
+    const a = intensity / 100;
+    for (let i = 0; i < d.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const v = d[i + c];
+        if (v < range) {
+          const factor = 1 - a * (1 - v / range);
+          d[i + c] = Math.max(0, Math.round(v * factor));
+        }
+      }
+    }
+  },
+
+  applyVignette(imageData, amount) {
+    const d = imageData.data;
+    const w = imageData.width;
+    const h = imageData.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const maxD = Math.sqrt(cx * cx + cy * cy);
+    const a = amount / 100;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const ratio = dist / maxD;
+        const factor = 1 - a * ratio * ratio;
+        const i = (y * w + x) * 4;
+        d[i]     = Math.round(d[i]     * factor);
+        d[i + 1] = Math.round(d[i + 1] * factor);
+        d[i + 2] = Math.round(d[i + 2] * factor);
+      }
+    }
+  },
+
+  applySharpen(imageData, amount) {
+    const a = amount / 100;
+    const w = imageData.width;
+    const h = imageData.height;
+    const src = imageData.data;
+    const out = new Uint8ClampedArray(src.length);
+    const center = 1 + 4 * a;
+    const side = -a;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          let sum = src[i + c] * center;
+          if (x > 0)     sum += src[i - 4 + c] * side;
+          if (x < w - 1) sum += src[i + 4 + c] * side;
+          if (y > 0)     sum += src[i - w * 4 + c] * side;
+          if (y < h - 1) sum += src[i + w * 4 + c] * side;
+          out[i + c] = Math.max(0, Math.min(255, sum));
+        }
+        out[i + 3] = src[i + 3];
+      }
+    }
+    return new ImageData(out, w, h);
+  },
+
+  applyLogo(ctx, logoImg, canvasSize, settings) {
+    const logoW = canvasSize * (settings.logoSize / 100);
+    const aspect = logoImg.height / logoImg.width;
+    const logoH = logoW * aspect;
+    const margin = canvasSize * (settings.logoMargin / 100);
+    const x = canvasSize - logoW - margin;
+    const y = canvasSize - logoH - margin;
+    ctx.save();
+    ctx.globalAlpha = settings.logoOpacity / 100;
+    ctx.drawImage(logoImg, x, y, logoW, logoH);
+    ctx.restore();
+  },
+
+  async canvasToBlob(canvas, quality = 0.92) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('Blob conversion failed')),
+        'image/jpeg', quality
+      );
+    });
+  }
+};
+
+function $(id) { return document.getElementById(id); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+let toastTimer = null;
+function toast(msg, type = '') {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast open' + (type ? ' ' + type : '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('open'), 2800);
+}
+
+function setProgress(open, text, current, total) {
+  const ov = $('progress-overlay');
+  if (!open) { ov.classList.remove('open'); return; }
+  ov.classList.add('open');
+  $('progress-text').textContent = text || 'PROCESSING...';
+  $('progress-count').textContent = `${current} / ${total}`;
+  const pct = total > 0 ? (current / total) * 100 : 0;
+  $('progress-fill').style.width = pct + '%';
+}
+
+async function addFiles(fileList) {
+  const validFiles = [];
+  for (const file of fileList) {
+    if (!file.type.startsWith('image/')) {
+      toast(`スキップ：${file.name}は画像ではありません`, 'err'); continue;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast(`スキップ：${file.name}が大きすぎます(50MB超)`, 'err'); continue;
+    }
+    validFiles.push(file);
+  }
+  for (const file of validFiles) {
+    const id = uid();
+    let thumbUrl = '';
+    try {
+      thumbUrl = await createThumbnail(file);
+    } catch (e) {
+      toast(`サムネイル生成失敗：${file.name}`, 'err'); continue;
+    }
+    State.files.push({ id, file, thumbDataUrl: thumbUrl, processedBlob: null, status: 'pending', errMsg: '' });
+  }
+  renderThumbs();
+  if (State.files.length > 0 && !State.selectedId) {
+    selectFile(State.files[0].id);
+  }
+}
+
+async function createThumbnail(file) {
+  const img = await ImageProcessor.loadImage(file);
+  const size = 160;
+  const minSide = Math.min(img.width, img.height);
+  const offsetX = (img.width - minSide) / 2;
+  const offsetY = (img.height - minSide) / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, offsetX, offsetY, minSide, minSide, 0, 0, size, size);
+  if (img.close) img.close();
+  return canvas.toDataURL('image/jpeg', 0.7);
+}
+
+function renderThumbs() {
+  const grid = $('thumb-grid');
+  $('file-count').textContent = State.files.length + ' FILES';
+  if (State.files.length === 0) {
+    grid.style.display = 'none'; grid.innerHTML = '';
+    $('btn-zip').disabled = true; return;
+  }
+  grid.style.display = 'grid';
+  grid.innerHTML = State.files.map(f => `
+    <div class="thumb ${f.id === State.selectedId ? 'selected' : ''}" data-id="${f.id}">
+      <button class="thumb-del" data-del="${f.id}">×</button>
+      <img src="${f.thumbDataUrl}" alt="">
+      ${f.status === 'done' ? '<span class="thumb-status done">OK</span>' : ''}
+      ${f.status === 'err' ? '<span class="thumb-status err">!</span>' : ''}
+    </div>
+  `).join('');
+  grid.querySelectorAll('.thumb').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.dataset.del) return;
+      selectFile(el.dataset.id);
+    });
+  });
+  grid.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFile(btn.dataset.del);
+    });
+  });
+  const hasDone = State.files.some(f => f.status === 'done');
+  $('btn-zip').disabled = !hasDone;
+}
+
+function removeFile(id) {
+  State.files = State.files.filter(f => f.id !== id);
+  if (State.selectedId === id) {
+    State.selectedId = State.files[0]?.id || null;
+    cachedPreviewImg = null;
+    cachedPreviewId = null;
+  }
+  renderThumbs();
+  updatePreview();
+}
+
+async function selectFile(id) {
+  if (State.selectedId !== id) {
+    cachedPreviewImg = null;
+    cachedPreviewId = null;
+  }
+  State.selectedId = id;
+  renderThumbs();
+  await updatePreview();
+}
+
+let previewDebounce = null;
+let cachedPreviewImg = null;
+let cachedPreviewId = null;
+
+function schedulePreview(delay = 120) {
+  if (previewDebounce) clearTimeout(previewDebounce);
+  previewDebounce = setTimeout(updatePreview, delay);
+}
+
+async function updatePreview() {
+  const file = State.files.find(f => f.id === State.selectedId);
+  const canvas = $('preview-canvas');
+  const empty = $('preview-empty');
+  const toggle = $('preview-toggle');
+  const hint = $('preview-hint');
+  const nameEl = $('preview-name');
+
+  if (!file) {
+    canvas.style.display = 'none';
+    empty.style.display = 'block';
+    toggle.style.display = 'none';
+    hint.style.display = 'none';
+    nameEl.textContent = '';
+    return;
+  }
+
+  nameEl.textContent = file.file.name;
+  empty.style.display = 'none';
+  canvas.style.display = 'block';
+  toggle.style.display = 'flex';
+  hint.style.display = 'block';
+
+  try {
+    let workImg;
+    if (cachedPreviewId === file.id && cachedPreviewImg) {
+      workImg = cachedPreviewImg;
+    } else {
+      const img = await ImageProcessor.loadImage(file.file);
+      const targetSize = 720;
+      const ratio = targetSize / Math.min(img.width, img.height);
+      if (ratio < 1) {
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = Math.round(img.width * ratio);
+        tmpCanvas.height = Math.round(img.height * ratio);
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.drawImage(img, 0, 0, tmpCanvas.width, tmpCanvas.height);
+        workImg = tmpCanvas;
+        if (img.close) img.close();
+      } else {
+        workImg = img;
+      }
+      cachedPreviewImg = workImg;
+      cachedPreviewId = file.id;
+    }
+
+    if (State.previewMode === 'before') {
+      const size = Math.min(workImg.width, workImg.height);
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const offsetX = (workImg.width - size) / 2;
+      const offsetY = (workImg.height - size) / 2;
+      ctx.drawImage(workImg, offsetX, offsetY, size, size, 0, 0, size, size);
+    } else {
+      const processed = await ImageProcessor.process(workImg, State.settings, State.logoImg);
+      canvas.width = processed.width;
+      canvas.height = processed.height;
+      canvas.getContext('2d').drawImage(processed, 0, 0);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('プレビュー失敗：' + (e.message || ''), 'err');
+  }
+}
+
+async function processAll() {
+  let targets = State.files.filter(f => f.status !== 'done');
+  if (targets.length === 0) {
+    if (State.files.length === 0) {
+      toast('画像が選択されていません', 'err'); return;
+    }
+    State.files.forEach(f => { f.status = 'pending'; f.processedBlob = null; });
+    targets = State.files.slice();
+  }
+  if (!State.logoImg) {
+    if (!confirm('ロゴが未設定です。ロゴなしで処理しますか？')) return;
+  }
+  setProgress(true, 'PROCESSING...', 0, targets.length);
+  let done = 0; let errCount = 0;
+  for (const f of targets) {
+    try {
+      const img = await ImageProcessor.loadImage(f.file);
+      const canvas = await ImageProcessor.process(img, State.settings, State.logoImg);
+      const blob = await ImageProcessor.canvasToBlob(canvas, 0.92);
+      f.processedBlob = blob;
+      f.status = 'done'; f.errMsg = '';
+      if (img.close) img.close();
+    } catch (e) {
+      console.error(e);
+      f.status = 'err'; f.errMsg = e.message || 'unknown error';
+      errCount++;
+    }
+    done++;
+    setProgress(true, 'PROCESSING...', done, targets.length);
+    await new Promise(r => setTimeout(r, 0));
+  }
+  setProgress(false);
+  renderThumbs();
+  if (errCount > 0) {
+    toast(`完了：${done - errCount}件成功 / ${errCount}件失敗`, 'err');
+  } else {
+    toast(`${done}件の加工が完了しました`, 'ok');
+  }
+}
+
+async function downloadZip() {
+  const done = State.files.filter(f => f.status === 'done' && f.processedBlob);
+  if (done.length === 0) {
+    toast('保存可能な画像がありません', 'err'); return;
+  }
+  setProgress(true, 'PACKAGING...', 0, done.length);
+  try {
+    if (typeof JSZip === 'undefined') {
+      throw new Error('JSZipの読み込みに失敗。インターネット接続を確認してください');
+    }
+    const zip = new JSZip();
+    let i = 0;
+    for (const f of done) {
+      const baseName = f.file.name.replace(/\.[^.]+$/, '');
+      const fileName = `${baseName}_pif.jpg`;
+      zip.file(fileName, f.processedBlob);
+      i++;
+      setProgress(true, 'PACKAGING...', i, done.length);
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.download = `pif_${ts}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setProgress(false);
+    toast('ZIPをダウンロードしました', 'ok');
+  } catch (e) {
+    console.error(e);
+    setProgress(false);
+    toast('ZIP生成失敗：' + (e.message || ''), 'err');
+  }
+}
+
+async function setLogo(file) {
+  if (!file.type.startsWith('image/')) {
+    toast('画像ファイルを選択してください', 'err'); return;
+  }
+  try {
+    const img = await ImageProcessor.loadImage(file);
+    State.logoImg = img;
+    State.logoBlob = file;
+    await DB.saveLogo(file);
+    renderLogoPreview();
+    toast('ロゴを保存しました', 'ok');
+    schedulePreview();
+  } catch (e) {
+    toast('ロゴ設定失敗：' + e.message, 'err');
+  }
+}
+
+async function clearLogo() {
+  if (!confirm('ロゴをクリアしますか？')) return;
+  try {
+    await DB.clearLogo();
+    State.logoImg = null;
+    State.logoBlob = null;
+    renderLogoPreview();
+    toast('ロゴをクリアしました', 'ok');
+    schedulePreview();
+  } catch (e) {
+    toast('クリア失敗：' + e.message, 'err');
+  }
+}
+
+function renderLogoPreview() {
+  const el = $('logo-preview');
+  if (State.logoBlob) {
+    const url = URL.createObjectURL(State.logoBlob);
+    el.innerHTML = `<img src="${url}" alt="logo">`;
+  } else {
+    el.innerHTML = `<span class="logo-preview-empty">透過PNG未設定</span>`;
+  }
+}
+
+async function loadSavedLogo() {
+  try {
+    const blob = await DB.loadLogo();
+    if (blob) {
+      const img = await ImageProcessor.loadImage(blob);
+      State.logoImg = img;
+      State.logoBlob = blob;
+      renderLogoPreview();
+    }
+  } catch (e) {
+    console.warn('Saved logo load failed:', e);
+  }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem('pif-settings-v2', JSON.stringify({
+      settings: State.settings,
+      preset: State.currentPreset
+    }));
+  } catch (e) { console.warn('Settings save failed:', e); }
+}
+
+function loadSettings() {
+  try {
+    const rawV2 = localStorage.getItem('pif-settings-v2');
+    if (rawV2) {
+      const data = JSON.parse(rawV2);
+      if (data.settings) Object.assign(State.settings, data.settings);
+      if (data.preset) State.currentPreset = data.preset;
+      return;
+    }
+    // v1からのマイグレーション
+    const rawV1 = localStorage.getItem('pif-settings');
+    if (rawV1) {
+      const data = JSON.parse(rawV1);
+      if (data.settings) {
+        const s = data.settings;
+        if (s.blackPoint !== undefined) {
+          State.settings.blackIntensity = Math.min(100, s.blackPoint * 2);
+          State.settings.blackRange = 128;
+        }
+        ['sharpen', 'vignette', 'cropX', 'cropY', 'logoSize', 'logoMargin', 'logoOpacity'].forEach(k => {
+          if (s[k] !== undefined) State.settings[k] = s[k];
+        });
+      }
+      saveSettings();
+    }
+  } catch (e) { console.warn('Settings load failed:', e); }
+}
+
+function applySettingsToUI() {
+  $('s-bint').value = State.settings.blackIntensity;
+  $('v-bint').textContent = State.settings.blackIntensity;
+  $('s-brng').value = State.settings.blackRange;
+  $('v-brng').textContent = State.settings.blackRange;
+  $('s-sharp').value = State.settings.sharpen;
+  $('v-sharp').textContent = State.settings.sharpen;
+  $('s-vig').value = State.settings.vignette;
+  $('v-vig').textContent = State.settings.vignette;
+  $('s-rot').value = Math.round(State.settings.rotation * 10);
+  $('v-rot').textContent = State.settings.rotation.toFixed(1) + '°';
+  $('s-zoom').value = State.settings.zoom;
+  $('v-zoom').textContent = State.settings.zoom + '%';
+  $('s-cx').value = State.settings.cropX;
+  $('v-cx').textContent = State.settings.cropX;
+  $('s-cy').value = State.settings.cropY;
+  $('v-cy').textContent = State.settings.cropY;
+  $('s-lsize').value = State.settings.logoSize;
+  $('v-lsize').textContent = State.settings.logoSize + '%';
+  $('s-lmargin').value = State.settings.logoMargin;
+  $('v-lmargin').textContent = State.settings.logoMargin + '%';
+  $('s-lopacity').value = State.settings.logoOpacity;
+  $('v-lopacity').textContent = State.settings.logoOpacity + '%';
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === State.currentPreset);
+  });
+}
+
+function applyPreset(name) {
+  if (!PRESETS[name]) return;
+  State.currentPreset = name;
+  Object.assign(State.settings, PRESETS[name]);
+  applySettingsToUI();
+  saveSettings();
+  schedulePreview();
+}
+
+function resetTransform() {
+  Object.assign(State.settings, TRANSFORM_DEFAULTS);
+  applySettingsToUI();
+  saveSettings();
+  schedulePreview(40);
+  toast('変形をリセットしました', 'ok');
+}
+
+// ============================================================
+// ジェスチャー
+// ============================================================
+const Gesture = {
+  active: null,
+  start: null,
+
+  init(target) {
+    target.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+    target.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+    target.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+    target.addEventListener('touchcancel', this.onTouchEnd.bind(this), { passive: false });
+    target.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+    target.addEventListener('mousedown', this.onMouseDown.bind(this));
+    window.addEventListener('mousemove', this.onMouseMove.bind(this));
+    window.addEventListener('mouseup', this.onMouseUp.bind(this));
+  },
+
+  _dist(t1, t2) { return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY); },
+  _angle(t1, t2) { return Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * 180 / Math.PI; },
+
+  onTouchStart(e) {
+    if (!cachedPreviewImg) return;
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      this.active = 'pinch';
+      this.start = {
+        dist: this._dist(e.touches[0], e.touches[1]),
+        angle: this._angle(e.touches[0], e.touches[1]),
+        zoom: State.settings.zoom,
+        rotation: State.settings.rotation,
+      };
+    } else if (e.touches.length === 1) {
+      e.preventDefault();
+      this.active = 'pan';
+      this.start = {
+        x: e.touches[0].clientX, y: e.touches[0].clientY,
+        cropX: State.settings.cropX, cropY: State.settings.cropY,
+      };
+    }
+  },
+
+  onTouchMove(e) {
+    if (!this.active || !this.start) return;
+    if (this.active === 'pinch' && e.touches.length === 2) {
+      e.preventDefault();
+      const newDist = this._dist(e.touches[0], e.touches[1]);
+      const newAngle = this._angle(e.touches[0], e.touches[1]);
+      const ratio = newDist / Math.max(1, this.start.dist);
+      let angleDelta = newAngle - this.start.angle;
+      if (angleDelta > 180) angleDelta -= 360;
+      if (angleDelta < -180) angleDelta += 360;
+
+      State.settings.zoom = clamp(Math.round(this.start.zoom * ratio), 100, 200);
+      State.settings.rotation = clamp(
+        +(this.start.rotation + angleDelta).toFixed(1), -45, 45
+      );
+      applySettingsToUI();
+      saveSettings();
+      schedulePreview(40);
+    } else if (this.active === 'pan' && e.touches.length === 1) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - this.start.x;
+      const dy = e.touches[0].clientY - this.start.y;
+      const previewSize = $('preview-wrap').clientWidth || 360;
+      State.settings.cropX = clamp(
+        Math.round(this.start.cropX - (dx / previewSize) * 100), -50, 50
+      );
+      State.settings.cropY = clamp(
+        Math.round(this.start.cropY - (dy / previewSize) * 100), -50, 50
+      );
+      applySettingsToUI();
+      saveSettings();
+      schedulePreview(40);
+    }
+  },
+
+  onTouchEnd(e) {
+    if (e.touches.length === 0) {
+      this.active = null;
+      this.start = null;
+      schedulePreview(20);
+    } else if (e.touches.length === 1 && this.active === 'pinch') {
+      this.active = 'pan';
+      this.start = {
+        x: e.touches[0].clientX, y: e.touches[0].clientY,
+        cropX: State.settings.cropX, cropY: State.settings.cropY,
+      };
+    }
+  },
+
+  onWheel(e) {
+    if (!cachedPreviewImg) return;
+    e.preventDefault();
+    if (e.shiftKey) {
+      const delta = e.deltaY > 0 ? -0.5 : 0.5;
+      State.settings.rotation = clamp(
+        +(State.settings.rotation + delta).toFixed(1), -45, 45
+      );
+    } else {
+      const delta = e.deltaY > 0 ? -2 : 2;
+      State.settings.zoom = clamp(State.settings.zoom + delta, 100, 200);
+    }
+    applySettingsToUI();
+    saveSettings();
+    schedulePreview(40);
+  },
+
+  onMouseDown(e) {
+    if (!cachedPreviewImg) return;
+    if (e.button !== 0) return;
+    this.active = e.shiftKey ? 'rotate-mouse' : 'pan';
+    this.start = {
+      x: e.clientX, y: e.clientY,
+      cropX: State.settings.cropX,
+      cropY: State.settings.cropY,
+      rotation: State.settings.rotation,
+    };
+  },
+
+  onMouseMove(e) {
+    if (!this.active || !this.start) return;
+    if (this.active === 'pan') {
+      const dx = e.clientX - this.start.x;
+      const dy = e.clientY - this.start.y;
+      const previewSize = $('preview-wrap').clientWidth || 360;
+      State.settings.cropX = clamp(
+        Math.round(this.start.cropX - (dx / previewSize) * 100), -50, 50
+      );
+      State.settings.cropY = clamp(
+        Math.round(this.start.cropY - (dy / previewSize) * 100), -50, 50
+      );
+    } else if (this.active === 'rotate-mouse') {
+      const dx = e.clientX - this.start.x;
+      State.settings.rotation = clamp(
+        +(this.start.rotation + dx * 0.2).toFixed(1), -45, 45
+      );
+    }
+    applySettingsToUI();
+    saveSettings();
+    schedulePreview(40);
+  },
+
+  onMouseUp() {
+    if (this.active) schedulePreview(20);
+    this.active = null;
+    this.start = null;
+  }
+};
+
+function bindEvents() {
+  $('file-input').addEventListener('change', async (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await addFiles(Array.from(e.target.files));
+      e.target.value = '';
+    }
+  });
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+  });
+
+  // 各スライダー（一括設定）
+  const sliderDefs = [
+    ['s-bint', 'v-bint', 'blackIntensity', v => v, null],
+    ['s-brng', 'v-brng', 'blackRange', v => v, null],
+    ['s-sharp', 'v-sharp', 'sharpen', v => v, null],
+    ['s-vig',   'v-vig',   'vignette', v => v, null],
+    ['s-rot',   'v-rot',   'rotation', v => (v / 10).toFixed(1) + '°', v => v / 10],
+    ['s-zoom',  'v-zoom',  'zoom', v => v + '%', null],
+    ['s-cx',    'v-cx',    'cropX', v => v, null],
+    ['s-cy',    'v-cy',    'cropY', v => v, null],
+    ['s-lsize', 'v-lsize', 'logoSize', v => v + '%', null],
+    ['s-lmargin','v-lmargin','logoMargin', v => v + '%', null],
+    ['s-lopacity','v-lopacity','logoOpacity', v => v + '%', null],
+  ];
+  sliderDefs.forEach(([sId, vId, key, formatter, transform]) => {
+    const sEl = $(sId);
+    const vEl = $(vId);
+    sEl.addEventListener('input', () => {
+      const raw = Number(sEl.value);
+      const stored = transform ? transform(raw) : raw;
+      vEl.textContent = formatter(raw);
+      State.settings[key] = stored;
+      saveSettings();
+      schedulePreview();
+    });
+  });
+
+  $('btn-reset-transform').addEventListener('click', resetTransform);
+
+  $('detail-toggle').addEventListener('click', () => {
+    $('detail-toggle').classList.toggle('open');
+    $('detail-body').classList.toggle('open');
+  });
+
+  document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      State.previewMode = btn.dataset.mode;
+      document.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('active', b === btn));
+      updatePreview();
+    });
+  });
+
+  $('btn-process').addEventListener('click', processAll);
+  $('btn-zip').addEventListener('click', downloadZip);
+
+  $('btn-logo-modal').addEventListener('click', () => $('logo-modal').classList.add('open'));
+  document.querySelectorAll('[data-close]').forEach(el => {
+    el.addEventListener('click', () => $('logo-modal').classList.remove('open'));
+  });
+  $('logo-modal').addEventListener('click', (e) => {
+    if (e.target === $('logo-modal')) $('logo-modal').classList.remove('open');
+  });
+  $('logo-input').addEventListener('change', async (e) => {
+    if (e.target.files && e.target.files[0]) {
+      await setLogo(e.target.files[0]);
+      e.target.value = '';
+    }
+  });
+  $('btn-logo-clear').addEventListener('click', clearLogo);
+
+  Gesture.init($('preview-wrap'));
+
+  window.addEventListener('beforeunload', (e) => {
+    const hasUnsaved = State.files.some(f => f.status === 'done' && f.processedBlob);
+    if (hasUnsaved) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+}
+
+async function init() {
+  loadSettings();
+  applySettingsToUI();
+  bindEvents();
+  await loadSavedLogo();
+  if (typeof indexedDB === 'undefined') {
+    toast('このブラウザはIndexedDB未対応です', 'err');
+  }
+  if (!HTMLCanvasElement.prototype.toBlob) {
+    toast('このブラウザはCanvas未対応です', 'err');
+  }
+}
+
+init().catch(e => {
+  console.error(e);
+  toast('起動エラー：' + e.message, 'err');
+});
+
+// Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then((reg) => {
+        console.log('[PWA] Service Worker registered:', reg.scope);
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          if (!newSW) return;
+          newSW.addEventListener('statechange', () => {
+            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+              if (confirm('新しいバージョンが利用可能です。更新しますか？')) {
+                newSW.postMessage('SKIP_WAITING');
+                window.location.reload();
+              }
+            }
+          });
+        });
+      })
+      .catch((e) => console.warn('[PWA] Service Worker registration failed:', e));
+  });
+}
+</script>
+</body>
+</html>
